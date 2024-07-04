@@ -60,6 +60,13 @@ const VideoRecorder = () => {
     };
   };
 
+  const handlePrediction = (prediction) => {
+    // Handle prediction data as needed, e.g., update state, UI, etc.
+    // For example:
+    setVideoDetails(prediction);
+  };
+  console.log({ humeSocket });
+
   const arrayBufferToBase64 = (buffer) => {
     let binary = "";
     const bytes = new Uint8Array(buffer);
@@ -68,12 +75,6 @@ const VideoRecorder = () => {
     }
     return window.btoa(binary);
   };
-  const handlePrediction = (prediction) => {
-    // Handle prediction data as needed, e.g., update state, UI, etc.
-    // For example:
-    setVideoDetails(prediction);
-  };
-  console.log({ humeSocket });
 
   const startRecording = async () => {
     try {
@@ -92,7 +93,9 @@ const VideoRecorder = () => {
           videoRef.current.play();
         }
 
-        mediaRecorderRef.current = new MediaRecorder(stream);
+        mediaRecorderRef.current = new MediaRecorder(stream, {
+          mimeType: "video/mp4",
+        });
         mediaRecorderRef.current.ondataavailable = (event) => {
           if (
             event.data &&
@@ -102,37 +105,46 @@ const VideoRecorder = () => {
           ) {
             const reader = new FileReader();
             reader.onloadend = () => {
+              const base64String = arrayBufferToBase64(reader.result);
+
+              console.log({ result: reader.result });
+              // const arrayBuffer = reader.result;
               // const base64String = btoa(
-              //   new Uint8Array(reader.result).reduce(
+              //   new Uint8Array(arrayBuffer).reduce(
               //     (data, byte) => data + String.fromCharCode(byte),
               //     ""
               //   )
               // );
-              console.log({ reader });
-              // const base64String = arrayBufferToBase64(reader.result);
-              const arrayBuffer = reader.result;
-              const uint8Array = new Uint8Array(arrayBuffer);
-              const base64String = btoa(
-                String.fromCharCode.apply(null, uint8Array)
-              );
 
               const chunk = {
-                data: reader.result, // Ensure data is a valid string
+                data: base64String,
+                job_details: true,
                 models: {
                   face: {
                     fps_pred: 3,
                     prob_threshold: 0.5,
                     identify_faces: true,
                     min_face_size: 20,
-                    descriptions: {}, // Add any required fields for face model
-                    facs: {}, // Add any required fields for facs model
+                    descriptions: {},
+                    facs: {},
                   },
-                  prosody: {}, // Add your model configurations here
+                  prosody: {},
                 },
               };
+              console.log({ chunk });
+              console.log("sending hume data");
               humeSocket.send(JSON.stringify(chunk));
             };
-            reader.readAsArrayBuffer(event.data);
+            const blob = new Blob([event.data], {
+              type: "video/wemb",
+            });
+            // reader.readAsDataURL(blob);
+
+            // reader.readAsArrayBuffer(event.data);
+            // reader.onloadend = () => {
+            //   console.log(reader.result);
+            // };
+            reader.readAsDataURL(event.data);
           }
         };
 
