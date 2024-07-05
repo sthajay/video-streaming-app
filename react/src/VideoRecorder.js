@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-const HUME_API_KEY = "tp79Q0ZBzRmtv3kBpdweoRpRVDIEggwBdHX7TNxZrOA1QWQA";
+const HUME_API_KEY = process.env.REACT_APP_HUME_API_KEY;
 const HUME_API_URL = "wss://api.hume.ai/v0/stream/models";
 
 const VideoRecorder = () => {
@@ -17,26 +17,23 @@ const VideoRecorder = () => {
   const [humeSocket, setHumeSocket] = useState(null);
 
   useEffect(() => {
-    if (!humeSocket || humeSocket.readyState !== WebSocket.OPEN) {
+    if (
+      HUME_API_KEY ||
+      !humeSocket ||
+      humeSocket.readyState !== WebSocket.OPEN
+    ) {
       connectToHume();
     }
   }, [humeSocket]);
+
+  console.log({ HUME_API_KEY });
+
   const connectToHume = async () => {
     const socket = new WebSocket(`${HUME_API_URL}?apiKey=${HUME_API_KEY}`);
 
     socket.onopen = () => {
       console.log("Connected to Hume AI WebSocket");
       setHumeSocket(socket);
-
-      // // Example initial message configuration (modify as per your needs)
-      // const initialMessage = {
-      //   data: "",
-      //   models: {
-      //     prosody: {}, // Sending an empty configuration for prosody
-      //   },
-      // };
-
-      // socket.send(JSON.stringify(initialMessage));
     };
 
     socket.onmessage = (event) => {
@@ -93,62 +90,64 @@ const VideoRecorder = () => {
           videoRef.current.play();
         }
 
-        mediaRecorderRef.current = new MediaRecorder(stream, {
-          mimeType: "video/mp4",
-        });
+        let chunks = [];
+
+        mediaRecorderRef.current = new MediaRecorder(stream);
+
         mediaRecorderRef.current.ondataavailable = (event) => {
-          if (
-            event.data &&
-            event.data.size > 0 &&
-            humeSocket &&
-            humeSocket.readyState === WebSocket.OPEN
-          ) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64String = arrayBufferToBase64(reader.result);
-
-              console.log({ result: reader.result });
-              // const arrayBuffer = reader.result;
-              // const base64String = btoa(
-              //   new Uint8Array(arrayBuffer).reduce(
-              //     (data, byte) => data + String.fromCharCode(byte),
-              //     ""
-              //   )
-              // );
-
-              const chunk = {
-                data: base64String,
-                job_details: true,
-                models: {
-                  face: {
-                    fps_pred: 3,
-                    prob_threshold: 0.5,
-                    identify_faces: true,
-                    min_face_size: 20,
-                    descriptions: {},
-                    facs: {},
-                  },
-                  prosody: {},
-                },
-              };
-              console.log({ chunk });
-              console.log("sending hume data");
-              humeSocket.send(JSON.stringify(chunk));
-            };
-            const blob = new Blob([event.data], {
-              type: "video/wemb",
-            });
-            // reader.readAsDataURL(blob);
-
-            // reader.readAsArrayBuffer(event.data);
-            // reader.onloadend = () => {
-            //   console.log(reader.result);
-            // };
-            reader.readAsDataURL(event.data);
+          if (event.data.size > 0) {
+            chunks.push(event.data);
           }
         };
 
-        mediaRecorderRef.current.start(100); // Send data every 100ms
+        mediaRecorderRef.current.onstop = () => {
+          // Combine all recorded chunks into a single Blob
+          const blob = new Blob(chunks, { type: "video/mp4" });
+
+          // Convert Blob to Base64
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Data = reader.result;
+
+            const chunk = {
+              data: reader.result?.split("base64,")[1],
+              job_details: true,
+              models: {
+                face: {
+                  fps_pred: 3,
+                  prob_threshold: 0.5,
+                  identify_faces: true,
+                  min_face_size: 20,
+                  descriptions: {},
+                  facs: {},
+                },
+                prosody: {},
+              },
+            };
+            console.log({ chunk });
+            console.log("sending hume data");
+            humeSocket.send(JSON.stringify(chunk));
+            chunks = [];
+          };
+          reader.readAsDataURL(blob);
+        };
+
+        mediaRecorderRef.current.start();
+        // Process chunks every 5 seconds
+        const interval = 5000; // 5 seconds
+        const processingInterval = setInterval(() => {
+          // Stop recording for this segment
+          mediaRecorderRef.current.stop();
+
+          // Restart recording for the next segment
+          mediaRecorderRef.current.start();
+
+          // Schedule the stop after 100ms (adjust as needed)
+          // setTimeout(() => {
+          //   mediaRecorderRef.current.stop();
+          // }, 100);
+        }, interval);
+
         setRecording(true);
       } else {
         console.error("humeSocket is not open or initialized.");
