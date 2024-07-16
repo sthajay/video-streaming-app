@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
-const HUME_API_KEY = process.env.REACT_APP_HUME_API_KEY;
+// const HUME_API_KEY = process.env.REACT_APP_HUME_API_KEY;
+const HUME_API_KEY = "tp79Q0ZBzRmtv3kBpdweoRpRVDIEggwBdHX7TNxZrOA1QWQA";
 const HUME_API_URL = "wss://api.hume.ai/v0/stream/models";
 
 const VideoRecorder = () => {
@@ -15,10 +16,18 @@ const VideoRecorder = () => {
   const videoChunksRef = useRef([]);
   const audioChunksRef = useRef([]);
   const [humeSocket, setHumeSocket] = useState(null);
-
+  const [firstFollowupDetails, setFirstFollowupDetails] = useState(null);
+  const [secondFollowupDetails, setSecondFollowupDetails] = useState(null);
+  const [performance, setPerformance] = useState(null);
+  const [semantics, setSemantics] = useState(null);
+  const [story, setStory] = useState(null);
+  const [predictions, setPredictions] = useState({
+    prosody: [],
+    face: [],
+  });
   useEffect(() => {
     if (
-      HUME_API_KEY ||
+      // HUME_API_KEY ||
       !humeSocket ||
       humeSocket.readyState !== WebSocket.OPEN
     ) {
@@ -26,7 +35,207 @@ const VideoRecorder = () => {
     }
   }, [humeSocket]);
 
-  console.log({ HUME_API_KEY });
+  // console.log({ HUME_API_KEY });
+
+  const storePredictions = (apiResponse) => {
+    const newProsodyPredictions = apiResponse.prosody?.predictions || [];
+    const newFacePredictions = apiResponse.face?.predictions || [];
+
+    setPredictions((prevPredictions) => ({
+      prosody: [...prevPredictions.prosody, ...newProsodyPredictions],
+      face: [...prevPredictions.face, ...newFacePredictions],
+    }));
+  };
+
+  // Function to format data for backend
+  const formatDataForBackend = (predictions) => {
+    const formattedData = {
+      results: {
+        predictions: [
+          {
+            models: {},
+          },
+        ],
+      },
+    };
+
+    if (predictions.prosody.length > 0) {
+      formattedData.results.predictions[0].models.prosody = {
+        grouped_predictions: [
+          {
+            predictions: predictions.prosody,
+          },
+        ],
+      };
+    }
+
+    if (predictions.face.length > 0) {
+      formattedData.results.predictions[0].models.face = {
+        grouped_predictions: [
+          {
+            predictions: predictions.face,
+          },
+        ],
+      };
+    }
+
+    return formattedData;
+  };
+
+  console.log({
+    performance,
+    story,
+    semantics,
+    firstFollowupDetails,
+    secondFollowupDetails,
+  });
+
+  const getFirstFollowupQuestion = async () => {
+    const formattedData = formatDataForBackend(predictions);
+    console.log({ formattedData });
+    try {
+      const bodyData = { predictions: [formattedData] };
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/getFirstFollowupQuestion/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bodyData),
+        }
+      );
+      const data = await response.json();
+      console.log({ data });
+      setFirstFollowupDetails(data.result);
+      // Clear stored predictions after successful save
+      // setPredictions({
+      //   prosody: [],
+      //   face: [],
+      // });
+    } catch (error) {
+      console.error("Error:", { error });
+    }
+  };
+
+  const getSecondFollowupQuestion = async () => {
+    const formattedData = formatDataForBackend(predictions);
+    console.log({ formattedData });
+    const bodyData = {
+      predictions: [formattedData],
+      firstFollowupQuestion: firstFollowupDetails["question"] || "",
+    };
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/getSecondFollowupQuestion/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bodyData),
+        }
+      );
+      const data = await response.json();
+      setSecondFollowupDetails(data);
+      console.log({ data });
+      // Clear stored predictions after successful save
+      // setPredictions({
+      //   prosody: [],
+      //   face: [],
+      // });
+    } catch (error) {
+      console.error("Error:", { error });
+    }
+  };
+
+  const generatePerformance = async () => {
+    const formattedData = formatDataForBackend(predictions);
+    const bodyData = {
+      predictions: [formattedData],
+    };
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/generatePerformance/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bodyData),
+        }
+      );
+      const performance = await response.json();
+      console.log({ performance });
+      setPerformance(performance);
+      // Clear stored predictions after successful save
+      // setPredictions({
+      //   prosody: [],
+      //   face: [],
+      // });
+    } catch (error) {
+      console.error("Error:", { error });
+    }
+  };
+
+  const generateSemantics = async () => {
+    const formattedData = formatDataForBackend(predictions);
+    const bodyData = {
+      predictions: [formattedData],
+    };
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/generateSemantics/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bodyData),
+        }
+      );
+      const semantics = await response.json();
+      console.log({ semantics });
+      setSemantics(semantics);
+      // Clear stored predictions after successful save
+      // setPredictions({
+      //   prosody: [],
+      //   face: [],
+      // });
+    } catch (error) {
+      console.error("Error:", { error });
+    }
+  };
+
+  const generateStory = async () => {
+    const formattedData = formatDataForBackend(predictions);
+    const bodyData = {
+      predictions: [formattedData],
+    };
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/generateStory/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bodyData),
+      });
+      const story = await response.json();
+      console.log({ story });
+      setStory(story);
+      // Clear stored predictions after successful save
+      // setPredictions({
+      //   prosody: [],
+      //   face: [],
+      // });
+    } catch (error) {
+      console.error("Error:", { error });
+    }
+  };
 
   const connectToHume = async () => {
     const socket = new WebSocket(`${HUME_API_URL}?apiKey=${HUME_API_KEY}`);
@@ -38,9 +247,10 @@ const VideoRecorder = () => {
 
     socket.onmessage = (event) => {
       try {
-        console.log({ eventonmessage: JSON.parse(event.data) });
         const messageObject = JSON.parse(event.data);
-        console.log("Received message from Hume AI:", messageObject);
+        // console.log("Received message from Hume AI:", {
+        //   response: messageObject,
+        // });
         handlePrediction(messageObject);
       } catch (error) {
         console.error("Error parsing message from Hume AI:", error);
@@ -60,17 +270,8 @@ const VideoRecorder = () => {
   const handlePrediction = (prediction) => {
     // Handle prediction data as needed, e.g., update state, UI, etc.
     // For example:
+    const storedPredictions = storePredictions(prediction);
     setVideoDetails(prediction);
-  };
-  console.log({ humeSocket });
-
-  const arrayBufferToBase64 = (buffer) => {
-    let binary = "";
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
   };
 
   const startRecording = async () => {
@@ -124,8 +325,7 @@ const VideoRecorder = () => {
                 prosody: {},
               },
             };
-            console.log({ chunk });
-            console.log("sending hume data");
+            // console.log("sending hume data", { chunk });
             humeSocket.send(JSON.stringify(chunk));
             chunks = [];
           };
@@ -209,6 +409,38 @@ const VideoRecorder = () => {
         <button onClick={stopRecording} disabled={!recording}>
           Stop Recording
         </button>
+        <button onClick={getFirstFollowupQuestion} disabled={!recording}>
+          Get First Question
+        </button>
+        {firstFollowupDetails && (
+          <button
+            onClick={getSecondFollowupQuestion}
+            disabled={!recording || !firstFollowupDetails}
+          >
+            Get Second Question
+          </button>
+        )}
+        {secondFollowupDetails && (
+          <button
+            onClick={generatePerformance}
+            disabled={!recording || !secondFollowupDetails}
+          >
+            Generate Performance
+          </button>
+        )}
+        {performance && (
+          <button
+            onClick={generateSemantics}
+            disabled={!recording || !performance}
+          >
+            Generate Semantics
+          </button>
+        )}
+        {semantics && (
+          <button onClick={generateStory} disabled={!recording || !semantics}>
+            Generate Story
+          </button>
+        )}
       </div>
       {recordedVideoBlob && (
         <div>
