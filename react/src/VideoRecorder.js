@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 // const HUME_API_KEY = process.env.REACT_APP_HUME_API_KEY;
 const HUME_API_KEY = "tp79Q0ZBzRmtv3kBpdweoRpRVDIEggwBdHX7TNxZrOA1QWQA";
 const HUME_API_URL = "wss://api.hume.ai/v0/stream/models";
+const USER_AUTH_TOKEN = "";
 
 const VideoRecorder = () => {
   const [recording, setRecording] = useState(false);
@@ -25,6 +26,8 @@ const VideoRecorder = () => {
     prosody: [],
     face: [],
   });
+  const [file, setFile] = useState(null);
+
   useEffect(() => {
     if (
       // HUME_API_KEY ||
@@ -82,32 +85,31 @@ const VideoRecorder = () => {
     return formattedData;
   };
 
-  console.log({
-    performance,
-    story,
-    semantics,
-    firstFollowupDetails,
-    secondFollowupDetails,
-  });
-
   const getFirstFollowupQuestion = async () => {
     const formattedData = formatDataForBackend(predictions);
     console.log({ formattedData });
     try {
-      const bodyData = { predictions: [formattedData] };
+      const bodyData = {
+        predictions: [formattedData],
+        genre: "Comedy",
+        projectType: "film",
+      };
+      console.log({ bodyData });
       const response = await fetch(
-        "http://127.0.0.1:8000/api/getFirstFollowupQuestion/",
+        // "http://127.0.0.1:8000/api/getFirstFollowupQuestion/",
+        "http://localhost:3001/elevator-pitch/getFirstFollowupQuestion/",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${USER_AUTH_TOKEN}`,
           },
           body: JSON.stringify(bodyData),
         }
       );
       const data = await response.json();
       console.log({ data });
-      setFirstFollowupDetails(data.result);
+      setFirstFollowupDetails(data);
       // Clear stored predictions after successful save
       // setPredictions({
       //   prosody: [],
@@ -123,16 +125,20 @@ const VideoRecorder = () => {
     console.log({ formattedData });
     const bodyData = {
       predictions: [formattedData],
-      firstFollowupQuestion: firstFollowupDetails["question"] || "",
+      firstFollowupQuestion:
+        firstFollowupDetails["firstFollowupQuestion"] || "",
+      elevatorPitchId: firstFollowupDetails["elevatorPitchId"] || "",
     };
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/getSecondFollowupQuestion/",
+        // "http://127.0.0.1:8000/api/getSecondFollowupQuestion/",
+        "http://localhost:3001/elevator-pitch/getSecondFollowupQuestion/",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${USER_AUTH_TOKEN}`,
           },
           body: JSON.stringify(bodyData),
         }
@@ -154,15 +160,18 @@ const VideoRecorder = () => {
     const formattedData = formatDataForBackend(predictions);
     const bodyData = {
       predictions: [formattedData],
+      elevatorPitchId: firstFollowupDetails["elevatorPitchId"] || "",
     };
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/generatePerformance/",
+        // "http://127.0.0.1:8000/api/generatePerformance/",
+        "http://localhost:3001/elevator-pitch/generatePerformance/",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${USER_AUTH_TOKEN}`,
           },
           body: JSON.stringify(bodyData),
         }
@@ -184,15 +193,18 @@ const VideoRecorder = () => {
     const formattedData = formatDataForBackend(predictions);
     const bodyData = {
       predictions: [formattedData],
+      elevatorPitchId: firstFollowupDetails["elevatorPitchId"] || "",
     };
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/generateSemantics/",
+        // "http://127.0.0.1:8000/api/generateSemantics/",
+        "http://localhost:3001/elevator-pitch/generateSemantics/",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${USER_AUTH_TOKEN}`,
           },
           body: JSON.stringify(bodyData),
         }
@@ -214,16 +226,22 @@ const VideoRecorder = () => {
     const formattedData = formatDataForBackend(predictions);
     const bodyData = {
       predictions: [formattedData],
+      elevatorPitchId: firstFollowupDetails["elevatorPitchId"] || "",
     };
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/generateStory/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(bodyData),
-      });
+      const response = await fetch(
+        // "http://127.0.0.1:8000/api/generateStory/",
+        "http://localhost:3001/elevator-pitch/generateStory/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${USER_AUTH_TOKEN}`,
+          },
+          body: JSON.stringify(bodyData),
+        }
+      );
       const story = await response.json();
       console.log({ story });
       setStory(story);
@@ -248,9 +266,9 @@ const VideoRecorder = () => {
     socket.onmessage = (event) => {
       try {
         const messageObject = JSON.parse(event.data);
-        // console.log("Received message from Hume AI:", {
-        //   response: messageObject,
-        // });
+        console.log("Received message from Hume AI:", {
+          response: messageObject,
+        });
         handlePrediction(messageObject);
       } catch (error) {
         console.error("Error parsing message from Hume AI:", error);
@@ -325,7 +343,7 @@ const VideoRecorder = () => {
                 prosody: {},
               },
             };
-            // console.log("sending hume data", { chunk });
+            console.log("sending hume data", { chunk });
             humeSocket.send(JSON.stringify(chunk));
             chunks = [];
           };
@@ -399,6 +417,43 @@ const VideoRecorder = () => {
     }
   };
 
+  const handleFileChange = (event) => {
+    setFile(event.target.files[0]);
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      alert("Please select a video file first.");
+      return;
+    }
+
+    // setUploading(true);
+    // setError(null);
+    // setSuccess(null);
+
+    const formData = new FormData();
+    formData.append("video", file);
+    formData.append("elevatorPitchId", firstFollowupDetails["elevatorPitchId"]);
+
+    try {
+      const response = await fetch(
+        "http://localhost:3001/elevator-pitch/uploadPitchToS3",
+        {
+          // Replace with your backend API endpoint
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${USER_AUTH_TOKEN}`,
+          },
+          body: formData,
+        }
+      );
+      console.log("Upload Response:", response.data);
+    } catch (err) {
+      console.error("Upload Error:", err);
+    } finally {
+    }
+  };
+
   return (
     <div>
       <video ref={videoRef} width="640" height="480" />
@@ -460,6 +515,10 @@ const VideoRecorder = () => {
           <p>Chunk Size: {videoDetails.size} bytes</p>
         </div>
       )}
+
+      <h1>Upload Video</h1>
+      <input type="file" accept="video/*" onChange={handleFileChange} />
+      <button onClick={handleUpload}>Upload</button>
     </div>
   );
 };
